@@ -41,6 +41,8 @@ This repository isn't just theory. It contains the literal "Phase-Space Spectrom
 
 **File:** [`rtdelaybundle.html`](index.html)
 
+Try it at: https://anttiluode.github.io/OriginOfLife/ 
+
 *   **What it does:** A browser-based interactive 3D topology simulator. It demonstrates how a single 1D signal (like an EEG wire) contains multiple,
 *   overlapping physical realities. By tuning three simultaneous Takens delays (Fast, Medium, Slow), users can watch a chaotic 1D signal visually unfold
 *    into a pristine, nested 3D torus.
