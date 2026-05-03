@@ -39,7 +39,7 @@ This repository isn't just theory. It contains the literal "Phase-Space Spectrom
 
 ### 2. The RT Delay Bundle Explorer
 
-**File:** [`rtdelaybundle.html`](index.html)
+**File:** [`index.html`](index.html)
 
 Try it at: https://anttiluode.github.io/OriginOfLife/ 
 
