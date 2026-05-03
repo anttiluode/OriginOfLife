@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RT Delay Bundle Explorer</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0b12;
+            color: #d1d1e0;
+            font-family: 'Share Tech Mono', monospace;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            padding: 15px 20px;
+            background: #11111a;
+            border-bottom: 1px solid #222233;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 10;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #00ffcc;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 255, 204, 0.4);
+        }
+
+        #controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .control-group label {
+            font-size: 10px;
+            color: #8888aa;
+            letter-spacing: 1px;
+        }
+
+        .slider-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        input[type="range"] {
+            -webkit-appearance: none;
+            width: 120px;
+            height: 4px;
+            background: #222233;
+            border-radius: 2px;
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff00aa;
+            cursor: pointer;
+            box-shadow: 0 0 8px #ff00aa;
+        }
+
+        .val-display {
+            font-size: 12px;
+            width: 25px;
+            color: #ff00aa;
+        }
+
+        #toggle-rot {
+            background: transparent;
+            border: 1px solid #444466;
+            color: #fff;
+            font-family: inherit;
+            padding: 4px 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        #toggle-rot.active {
+            border-color: #00ffcc;
+            color: #00ffcc;
+            box-shadow: 0 0 8px rgba(0,255,204,0.3);
+        }
+
+        #viewport-3d {
+            flex: 1;
+            position: relative;
+        }
+
+        #signal-strip-container {
+            height: 120px;
+            background: #0d0d16;
+            border-top: 1px solid #222233;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .strip-header {
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            font-size: 10px;
+            color: #666688;
+        }
+
+        canvas#signal-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+    </style>
+    <!-- Include Three.js via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="header">
+        <h1>RT DELAY BUNDLE EXPLORER</h1>
+        <div id="controls">
+            <div class="control-group">
+                <label>X-Axis: Fast Arm Delay (τ_fast)</label>
+                <div class="slider-row">
+                    <input type="range" id="tau-fast" min="1" max="40" value="3">
+                    <span class="val-display" id="val-fast">3</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Y-Axis: Medium Arm Delay (τ_med)</label>
+                <div class="slider-row">
+                    <input type="range" id="tau-med" min="10" max="80" value="20">
+                    <span class="val-display" id="val-med">20</span>
+                </div>
+            </div>
+            <div class="control-group">
+                <label>Z-Axis: Slow Arm Delay (τ_slow)</label>
+                <div class="slider-row">
+                    <input type="range" id="tau-slow" min="50" max="300" value="120">
+                    <span class="val-display" id="val-slow">120</span>
+                </div>
+            </div>
+            <button id="toggle-rot" class="active">AUTO ROTATE</button>
+        </div>
+    </div>
+
+    <div id="viewport-3d"></div>
+
+    <div id="signal-strip-container">
+        <div class="strip-header">1D COMPOSITE SIGNAL S(t)</div>
+        <canvas id="signal-canvas"></canvas>
+    </div>
+
+    <script>
+        // --- 1. DATA GENERATION ---
+        // S(t) = 1.5*sin(t*0.05) + 0.8*sin(t*0.3) + 0.3*sin(t*2.1)
+        const N = 4000;
+        const signal = new Float32Array(N);
+        let minS = Infinity, maxS = -Infinity;
+
+        for (let i = 0; i < N; i++) {
+            let t = i;
+            let val = 1.5 * Math.sin(t * 0.05) + 
+                      0.8 * Math.sin(t * 0.3) + 
+                      0.3 * Math.sin(t * 2.1);
+            signal[i] = val;
+            if (val < minS) minS = val;
+            if (val > maxS) maxS = val;
+        }
+
+        // --- 2. THREE.JS 3D SETUP ---
+        const container = document.getElementById('viewport-3d');
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0b0b12, 0.04);
+
+        const camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 0, 10);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Create Line Geometry
+        const geometry = new THREE.BufferGeometry();
+        const positions = new Float32Array(N * 3);
+        const colors = new Float32Array(N * 3);
+        geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+        const material = new THREE.LineBasicMaterial({
+            vertexColors: true,
+            transparent: true,
+            opacity: 0.8,
+            blending: THREE.AdditiveBlending
+        });
+
+        const line = new THREE.Line(geometry, material);
+        scene.add(line);
+
+        // Helper function for color gradient (Blue/Cyan -> Pink/Orange based on depth)
+        function getColor(normalizedZ) {
+            const color = new THREE.Color();
+            // normalizedZ is roughly 0 to 1
+            color.setHSL(0.6 - (normalizedZ * 0.7), 1.0, 0.6);
+            return color;
+        }
+
+        // --- 3. UI CONTROLS & LOGIC ---
+        let tauFast = 3, tauMed = 20, tauSlow = 120;
+        let autoRotate = true;
+
+        const uiFast = document.getElementById('tau-fast');
+        const uiMed = document.getElementById('tau-med');
+        const uiSlow = document.getElementById('tau-slow');
+        const valFast = document.getElementById('val-fast');
+        const valMed = document.getElementById('val-med');
+        const valSlow = document.getElementById('val-slow');
+
+        function updateAttractor() {
+            tauFast = parseInt(uiFast.value);
+            tauMed = parseInt(uiMed.value);
+            tauSlow = parseInt(uiSlow.value);
+
+            valFast.textContent = tauFast;
+            valMed.textContent = tauMed;
+            valSlow.textContent = tauSlow;
+
+            const maxTau = Math.max(tauFast, tauMed, tauSlow);
+            const validPoints = N - maxTau;
+
+            let posIdx = 0;
+            let colIdx = 0;
+
+            for (let i = maxTau; i < N; i++) {
+                // TAKENS EMBEDDING: X=Fast, Y=Med, Z=Slow
+                let x = signal[i - tauFast];
+                let y = signal[i - tauMed];
+                let z = signal[i - tauSlow];
+
+                positions[posIdx++] = x;
+                positions[posIdx++] = y;
+                positions[posIdx++] = z;
+
+                // Normalize Z for coloring (-2.6 to 2.6 rough range)
+                let normZ = (z - minS) / (maxS - minS);
+                let c = getColor(normZ);
+                
+                colors[colIdx++] = c.r;
+                colors[colIdx++] = c.g;
+                colors[colIdx++] = c.b;
+            }
+
+            // Zero out remainder if any
+            for (let i = posIdx; i < N * 3; i++) {
+                positions[i] = 0;
+                colors[i] = 0;
+            }
+
+            geometry.attributes.position.needsUpdate = true;
+            geometry.attributes.color.needsUpdate = true;
+            geometry.setDrawRange(0, validPoints);
+        }
+
+        document.getElementById('toggle-rot').addEventListener('click', (e) => {
+            autoRotate = !autoRotate;
+            e.target.classList.toggle('active', autoRotate);
+        });
+
+        [uiFast, uiMed, uiSlow].forEach(el => el.addEventListener('input', updateAttractor));
+
+        // --- 4. 1D SIGNAL CANVAS RENDERING ---
+        const sigCanvas = document.getElementById('signal-canvas');
+        const ctx = sigCanvas.getContext('2d');
+        let timeOffset = 0;
+
+        function resizeCanvas() {
+            sigCanvas.width = sigCanvas.clientWidth;
+            sigCanvas.height = sigCanvas.clientHeight;
+        }
+        window.addEventListener('resize', () => {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            resizeCanvas();
+        });
+        resizeCanvas();
+
+        function draw1DSignal() {
+            const w = sigCanvas.width;
+            const h = sigCanvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            // Draw Signal Waveform
+            ctx.beginPath();
+            ctx.strokeStyle = "rgba(100, 150, 255, 0.4)";
+            ctx.lineWidth = 2;
+
+            const windowSize = 800; // How many points to show
+            const startIdx = Math.floor(timeOffset) % (N - windowSize);
+
+            for (let i = 0; i < windowSize; i++) {
+                let sVal = signal[startIdx + i];
+                let normY = (sVal - minS) / (maxS - minS);
+                let x = (i / windowSize) * w;
+                let y = h - (normY * h * 0.8 + h * 0.1);
+
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+
+            // Draw the "Current Time" and "Lookback Delays" markers
+            const currentT = windowSize - 50; // Pin current time near the right edge
+            const xT = (currentT / windowSize) * w;
+
+            // Draw t (Current)
+            ctx.beginPath(); ctx.strokeStyle = "#ffffff"; ctx.setLineDash([2, 2]);
+            ctx.moveTo(xT, 0); ctx.lineTo(xT, h); ctx.stroke();
+            ctx.fillStyle = "#fff"; ctx.fillText("t", xT - 5, h - 5);
+
+            // Draw t - tau_fast (X axis)
+            let xFast = ((currentT - tauFast) / windowSize) * w;
+            ctx.beginPath(); ctx.strokeStyle = "#00ffcc"; ctx.moveTo(xFast, 0); ctx.lineTo(xFast, h); ctx.stroke();
+            ctx.fillStyle = "#00ffcc"; ctx.fillText("Fast", xFast - 10, h - 20);
+
+            // Draw t - tau_med (Y axis)
+            let xMed = ((currentT - tauMed) / windowSize) * w;
+            ctx.beginPath(); ctx.strokeStyle = "#ff00aa"; ctx.moveTo(xMed, 0); ctx.lineTo(xMed, h); ctx.stroke();
+            ctx.fillStyle = "#ff00aa"; ctx.fillText("Med", xMed - 10, h - 35);
+
+            // Draw t - tau_slow (Z axis)
+            let xSlow = ((currentT - tauSlow) / windowSize) * w;
+            ctx.beginPath(); ctx.strokeStyle = "#ffaa00"; ctx.moveTo(xSlow, 0); ctx.lineTo(xSlow, h); ctx.stroke();
+            ctx.fillStyle = "#ffaa00"; ctx.fillText("Slow", xSlow - 10, h - 50);
+            
+            ctx.setLineDash([]); // reset
+        }
+
+        // --- 5. ANIMATION LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (autoRotate) {
+                scene.rotation.y += 0.005;
+                scene.rotation.x = Math.sin(Date.now() * 0.0005) * 0.3;
+            }
+
+            timeOffset += 1.5; // Scroll the 1D chart
+            draw1DSignal();
+
+            renderer.render(scene, camera);
+        }
+
+        // Initialize and Run
+        updateAttractor();
+        animate();
+
+    </script>
+</body>
+</html>
