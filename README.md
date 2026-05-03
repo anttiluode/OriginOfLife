@@ -39,7 +39,7 @@ This repository isn't just theory. It contains the literal "Phase-Space Spectrom
 
 ### 2. The RT Delay Bundle Explorer
 
-**File:** [`rtdelaybundle.html`](rtdelaybundle.html)
+**File:** [`rtdelaybundle.html`](index.html)
 
 *   **What it does:** A browser-based interactive 3D topology simulator. It demonstrates how a single 1D signal (like an EEG wire) contains multiple,
 *   overlapping physical realities. By tuning three simultaneous Takens delays (Fast, Medium, Slow), users can watch a chaotic 1D signal visually unfold
