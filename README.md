@@ -6,6 +6,8 @@
 
 > *"The inside is multiplicative. The outside is additive. The Rajapinta is the boundary that turns one into the other."*
 
+![Kernel Recovery Demo](kernel_recovery_demo.png)
+
 This repository contains the code, interactive simulators, and the foundational theoretical paper proposing that the origin of
 life—and the fundamental nature of neural computation—is best understood as a series of 
 
